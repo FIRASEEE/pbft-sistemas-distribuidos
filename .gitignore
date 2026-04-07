@@ -1,0 +1,7 @@
+  # Eclipse .classpath
+  .project .settings/
+  # Compiled
+  build/ *.class
+  # OS
+  .DS_Store
+  Thumbs.db
