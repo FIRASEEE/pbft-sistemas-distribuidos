@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
+import jakarta.inject.Singleton;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
@@ -18,6 +19,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
 
+@Singleton
 @Path("servicio")
 public class Servicio {
 	
@@ -30,18 +32,29 @@ public class Servicio {
 	Properties config;
 	public Servicio() throws Exception, IOException {
 		miPuerto=System.getProperty("puerto");
-		miDireccion=System.getProperty("direccion")+":"+miPuerto;
 		procesosLocales= new HashMap<>();
 		procesosRemotos= new HashMap<>();
-		
+
 		config =new Properties();
 		String ruta=System.getProperty("config.path");
 		config.load(new FileInputStream(ruta));
-		 totalProcesos=Integer.parseInt(config.getProperty("total.procesos"));
+		totalProcesos=Integer.parseInt(config.getProperty("total.procesos"));
+		miDireccion=resolverDireccion();
 		client=ClientBuilder.newClient();
 		iniciar();
 		}
 	
+	private String resolverDireccion() {
+		for (int i=1;i<=totalProcesos;i++) {
+			String puerto=config.getProperty("proceso."+i+".puerto");
+			if (miPuerto.equals(puerto)) {
+				String ip=config.getProperty("proceso."+i+".ip");
+				return ip+":"+miPuerto;
+			}
+		}
+		return "";
+	}
+
 	public void iniciar() {
 			
 		int puerto=Integer.parseInt(miPuerto);
@@ -59,20 +72,33 @@ public class Servicio {
 			}
 		}
 	}
+	@GET
+	@Path("reiniciar")
+	public String reiniciar() {
+		for (Proceso proceso: procesosLocales.values()) {
+			proceso.reiniciar();
+		}
+		return "Procesos reiniciados";
+	}
 		
 	@GET
 	@Path("propuesta")
 	public String propuesta(@QueryParam("valor") int valor,@QueryParam("procesoId") int procesoId) {
+		System.out.println("Recibida propuesta de P"+procesoId+" con valor "+valor);
 		int valorPropuesta=-1;
-		int valorCompromiso=-1;
 		int valorComision=-1;
 		Proceso procesoLocal=procesosLocales.get(procesoId);
+		
 		if (procesoLocal!=null) {
 			valorPropuesta=procesoLocal.propuesta(valor);
+			
 		}
+
 		 enviarCompromisos(valorPropuesta, procesoId);
 		 
-		 procesoLocal.esperarConfirmacion(10000);
+		 
+		 procesoLocal.esperarConfirmacion(30000);
+
 		 return procesoLocal.variableToString();
 	
 	}
@@ -106,6 +132,17 @@ public class Servicio {
 	}
 	
 	@GET
+	@Path("fallo")
+	public String fallo(@QueryParam("procesoId") int procesoId) {
+		Proceso procesoLocal=procesosLocales.get(procesoId);
+		if (procesoLocal!=null) {
+			procesoLocal.modificarError();;
+			return "Fallo registrado en proceso "+procesoId;
+		}
+		return "Proceso "+procesoId+" no encontrado";
+	}
+	
+	@GET
 	@Path("estado")
 	public String estado() {
 		StringBuilder estado= new StringBuilder();
@@ -126,6 +163,7 @@ public class Servicio {
 			if(procesosLocales.containsKey(i)) {
 				Proceso procesoLocal=procesosLocales.get(i);
 				int valorCompromiso=procesoLocal.compromiso(valorPropuesta);
+				System.out.println("se ha ejecutado compromiso proceso local "+valorCompromiso);
 				if (valorCompromiso!=-1) {
 					enviarComisiones(valorCompromiso, i);
 				}

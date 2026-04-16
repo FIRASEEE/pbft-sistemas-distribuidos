@@ -1,8 +1,10 @@
 package com.pbft.cliente;
 
 import java.net.URI;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 import jakarta.ws.rs.client.Client;
 import jakarta.ws.rs.client.ClientBuilder;
@@ -31,64 +33,80 @@ public class Cliente {
 		
 	}
 	public void propuesta(int valor) {
-		for (Map.Entry<Integer, String> entry : procesosRemotos.entrySet()) {
-		    int idProceso = entry.getKey();
-		    String direccionProceso = entry.getValue();
-		    URI uri = UriBuilder.fromUri("http://" + direccionProceso).build();
-		    WebTarget target = client.target(uri);
-		    String respuesta=target.path("rest").path("servicio").path("propuesta")
-		        .queryParam("valor", valor)
-		        .request()
-		        .get(String.class);
-		    
-		    System.out.println("Respuesta del proceso " + idProceso + ": " + respuesta);
-		    
-		    
+		
+		Set <String> serviciosConsultados= new HashSet<>(procesosRemotos.values());
+		for (String servicio : serviciosConsultados) {
+			URI uri = UriBuilder.fromUri("http://" + servicio+"/pbft").build();
+			WebTarget target = client.target(uri);
+			String respuesta = target.path("rest").path("servicio").path("reiniciar")
+			    .request()
+			    .get(String.class);
+			System.out.println("Respuesta de " + servicio + ": " + respuesta);
 		}
+		
+	    for (Map.Entry<Integer, String> entry : procesosRemotos.entrySet()) {
+	        int idProceso = entry.getKey();
+	        String direccionProceso = entry.getValue();
+	        System.out.println("Enviando propuesta a proceso " + idProceso + " en " + direccionProceso);
+	        new Thread(() -> {
+	            URI uri = UriBuilder.fromUri("http://" + direccionProceso+"/pbft").build();
+	            WebTarget target = client.target(uri);
+	            String respuesta = target.path("rest").path("servicio").path("propuesta")
+	                .queryParam("valor", valor)
+	                .queryParam("procesoId", idProceso)
+	                .request()
+	                .get(String.class);
+	            System.out.println("P" + idProceso + " → " + respuesta);
+	        }).start();
+	    }
 	}
 	public void fallo(int idProceso) {
 		String direccionProceso=procesosRemotos.get(idProceso);
-		URI uri = UriBuilder.fromUri("http://" + direccionProceso).build();
+		URI uri = UriBuilder.fromUri("http://" + direccionProceso +"/pbft").build();
 		WebTarget target = client.target(uri);
-		String respuesta = target.path("rest").path("servicio").path("fallo").request().get(String.class);
+		String respuesta = target.path("rest").path("servicio").path("fallo").queryParam("procesoId", idProceso).request().get(String.class);
 		System.out.println("Respuesta del proceso " + idProceso + ": " + respuesta);
 	}
 	
 	public void estado() {
+		
+		Set <String> serviciosConsultados= new HashSet<>(procesosRemotos.values());
+		System.out.println("id\tvar\tcompromisos\terror");
+		for (String servicio : serviciosConsultados) {
+			URI uri = UriBuilder.fromUri("http://" + servicio+"/pbft").build();
+			WebTarget target = client.target(uri);
+			String respuesta = target.path("rest").path("servicio").path("estado").request().get(String.class);
+			System.out.print(respuesta);
+		}
+		
 	
 	}
 		
 	
-	public static void main(String[] args) {
-	     int opcion=0;
-	     System.out.println("Bienvenido al cliente PBFT");
-	     System.out.println("Seleccione una opción:");
-	     System.out.println("1. Fallo sN (n es el número del proceso que falla)");
-	     System.out.println("2. cambiar el valor sX (X es el nuevo valor a enviar)");
-	     System.out.println("3.estado (s) para mostrar el estado de los procesos");
-	     System.out.println("4 ayuda(h) para mostrar las opciones");
-	     System.out.println("5. Salir");
-	     
-	     switch (opcion) {
-	        case 1:
-	            // Lógica para simular el fallo de un proceso
-	            break;
-	        case 2:
-	            // Lógica para cambiar el valor a enviar
-	            break;
-	        case 3:
-	            // Lógica para mostrar el estado de los procesos
-	            break;
-	        case 4:
-	            // Lógica para mostrar las opciones de ayuda
-	            break;
-	        case 5:
-	            System.out.println("Saliendo del cliente PBFT...");
-	            break;
-	        default:
-	            System.out.println("Opción no válida. Por favor, seleccione una opción válida.");
+	public static void main(String[] args) throws Exception {
+	    Cliente cliente = new Cliente();
+	    java.util.Scanner scanner = new java.util.Scanner(System.in);
 	    
-	}	
-
+	    System.out.println("Cliente PBFT iniciado. Escribe 'h' para ayuda.");
+	    
+	    while (true) {
+	        System.out.print("> ");
+	        String input = scanner.nextLine().trim();
+	        
+	        if (input.equals("h")) {
+	            System.out.println("fN  - Activar/desactivar fallo en proceso N");
+	            System.out.println("sX  - Proponer cambiar valor a X");
+	            System.out.println("s   - Mostrar estado");
+	            System.out.println("h   - Ayuda");
+	        } else if (input.equals("s")) {
+	            cliente.estado();
+	        } else if (input.startsWith("f")) {
+	            int id = Integer.parseInt(input.substring(1));
+	            cliente.fallo(id);
+	        } else if (input.startsWith("s")) {
+	            int valor = Integer.parseInt(input.substring(1));
+	            cliente.propuesta(valor);
+	        }
+	    }
 	}
 }

@@ -30,12 +30,17 @@ public class Proceso extends Thread {
 	public void run() {
 	}
 	
+	public void reiniciar() {
+		synchronized(this) {
+			this.variable=-1;
+			this.compromisos.clear();
+			this.comisiones.clear();
+			this.compromisoEnviado= false;
+			this.comisionEnviada= false;
+		}
+	}
+	
 	public int propuesta(int valor) {
-		this.variable= -1;
-		compromisos.clear();
-		comisiones.clear();
-		this.compromisoEnviado= false;
-		this.comisionEnviada= false;
 		if (error){
 			return new Random().nextInt(101);
 		}
@@ -48,7 +53,10 @@ public class Proceso extends Thread {
 	public int compromiso(int valor) {
 		synchronized(this) {
 			this.compromisos.add(valor);
+			System.out.println("lista compromisos size "+compromisos.size()+"de proceso "+this.id);
 			if (compromisoEnviado) return -1;
+		
+	
 			int frecuencia=Collections.frequency(compromisos, valor);
 			if (frecuencia>=this.quorum) {
 				this.compromisoEnviado= true;
