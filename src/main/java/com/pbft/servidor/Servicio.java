@@ -31,24 +31,25 @@ public class Servicio {
 	Client client;
 	Properties config;
 	public Servicio() throws Exception, IOException {
-		miPuerto=System.getProperty("puerto");
+		miPuerto=System.getProperty("puerto", "8080");
 		procesosLocales= new HashMap<>();
 		procesosRemotos= new HashMap<>();
 
 		config =new Properties();
-		String ruta=System.getProperty("config.path");
+		String ruta=System.getProperty("config.path","/usr/local/tomcat/config.properties");
 		config.load(new FileInputStream(ruta));
-		totalProcesos=Integer.parseInt(config.getProperty("total.procesos"));
-		miDireccion=resolverDireccion();
-		client=ClientBuilder.newClient();
+		totalProcesos=Integer.parseInt(config.getProperty("total.procesos").trim());
+		miDireccion = config.getProperty("mi.direccion").trim();
+		System.out.println("Mi direccion: " + miDireccion);
+		client =ClientBuilder.newClient();
 		iniciar();
 		}
 	
 	private String resolverDireccion() {
 		for (int i=1;i<=totalProcesos;i++) {
-			String puerto=config.getProperty("proceso."+i+".puerto");
+			String puerto=config.getProperty("proceso."+i+".puerto").trim();
 			if (miPuerto.equals(puerto)) {
-				String ip=config.getProperty("proceso."+i+".ip");
+				String ip=config.getProperty("proceso."+i+".ip").trim();
 				return ip+":"+miPuerto;
 			}
 		}
@@ -59,10 +60,11 @@ public class Servicio {
 			
 		int puerto=Integer.parseInt(miPuerto);
 		for (int i=1;i<=totalProcesos;i++) {
-			String ipProceso=config.getProperty("proceso."+i+".ip");
-			int puertoProceso=Integer.parseInt(config.getProperty("proceso."+i+".puerto"));
+			String ipProceso=config.getProperty("proceso."+i+".ip").trim();
+			int puertoProceso=Integer.parseInt(config.getProperty("proceso."+i+".puerto").trim());
 			String dirProceso=ipProceso+":"+puertoProceso;
-			if(dirProceso.equals(miDireccion)) {
+			System.out.println("Configurando proceso "+i+" en "+dirProceso);
+			if(ipProceso.equals(miDireccion)&& puertoProceso==puerto) {
 				Proceso procesoLocal=new Proceso(i,totalProcesos);
 				procesosLocales.put(i, procesoLocal);
 				procesoLocal.start();
@@ -85,21 +87,25 @@ public class Servicio {
 	@Path("propuesta")
 	public String propuesta(@QueryParam("valor") int valor,@QueryParam("procesoId") int procesoId) {
 		System.out.println("Recibida propuesta de P"+procesoId+" con valor "+valor);
-		int valorPropuesta=-1;
+		
 		int valorComision=-1;
+		
+		System.out.println("Procesos locales: " + procesosLocales.keySet());
 		Proceso procesoLocal=procesosLocales.get(procesoId);
 		
 		if (procesoLocal!=null) {
-			valorPropuesta=procesoLocal.propuesta(valor);
+			int valorPropuesta=procesoLocal.propuesta(valor);
+			new Thread(() -> enviarCompromisos(valorPropuesta, procesoId)).start();
+			 procesoLocal.esperarConfirmacion(30000);
+
+			 return procesoLocal.variableToString();
 			
 		}
 
-		 enviarCompromisos(valorPropuesta, procesoId);
+	    
 		 
-		 
-		 procesoLocal.esperarConfirmacion(30000);
+		return "error al procesar propuesta";
 
-		 return procesoLocal.variableToString();
 	
 	}
 	
@@ -170,7 +176,7 @@ public class Servicio {
 			}
 			else {
 				String dirProceso=procesosRemotos.get(i);
-				URI uri=UriBuilder.fromUri("http://"+dirProceso).build();
+				URI uri=UriBuilder.fromUri("http://"+dirProceso+"/pbft").build();
 				WebTarget target=client.target(uri)
 						.path("rest")
 						.path("servicio")
@@ -195,7 +201,7 @@ public class Servicio {
 			}
 			else {
 				String dirProceso=procesosRemotos.get(i);
-				URI uri=UriBuilder.fromUri("http://"+dirProceso).build();
+				URI uri=UriBuilder.fromUri("http://"+dirProceso+"/pbft").build();
 				WebTarget target=client.target(uri)
 						.path("rest")
 						.path("servicio")

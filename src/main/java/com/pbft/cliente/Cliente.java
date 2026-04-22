@@ -20,13 +20,13 @@ public class Cliente {
 	public Cliente() throws Exception {
 		client=ClientBuilder.newClient();
 		config =new Properties();
-		String ruta=System.getProperty("config.path");
+		String ruta=System.getProperty("config.path").trim();
 		config.load(new java.io.FileInputStream(ruta));
 		procesosRemotos= new java.util.HashMap<>();
-		int totalProcesos=Integer.parseInt(config.getProperty("total.procesos"));
+		int totalProcesos=Integer.parseInt(config.getProperty("total.procesos").trim());
 		for (int i=1;i<=totalProcesos;i++) {
-			String ipProceso=config.getProperty("proceso."+i+".ip");
-			int puertoProceso=Integer.parseInt(config.getProperty("proceso."+i+".puerto"));
+			String ipProceso=config.getProperty("proceso."+i+".ip").trim();
+			int puertoProceso=Integer.parseInt(config.getProperty("proceso."+i+".puerto").trim());
 			String dirProceso=ipProceso+":"+puertoProceso;
 			procesosRemotos.put(i, dirProceso);
 		}
@@ -36,7 +36,9 @@ public class Cliente {
 		
 		Set <String> serviciosConsultados= new HashSet<>(procesosRemotos.values());
 		for (String servicio : serviciosConsultados) {
+			System.out.println("Reiniciando proceso en " + servicio);
 			URI uri = UriBuilder.fromUri("http://" + servicio+"/pbft").build();
+			System.out.println("URI para reiniciar: " + uri);	
 			WebTarget target = client.target(uri);
 			String respuesta = target.path("rest").path("servicio").path("reiniciar")
 			    .request()
